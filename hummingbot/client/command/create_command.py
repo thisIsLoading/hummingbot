@@ -38,6 +38,7 @@ from hummingbot.strategy_v2.controllers.directional_trading_controller_base impo
     DirectionalTradingControllerConfigBase,
 )
 from hummingbot.strategy_v2.controllers.market_making_controller_base import MarketMakingControllerConfigBase
+from hummingbot.strategy_v2.controllers.simple_trading_controller_base import SimpleTradingControllerConfigBase
 
 if TYPE_CHECKING:
     from hummingbot.client.hummingbot_application import HummingbotApplication  # noqa: F401
@@ -84,7 +85,8 @@ class CreateCommand:
             config_class = next((member for member_name, member in inspect.getmembers(module)
                                  if inspect.isclass(member) and member not in [ControllerConfigBase,
                                                                                MarketMakingControllerConfigBase,
-                                                                               DirectionalTradingControllerConfigBase,]
+                                                                               DirectionalTradingControllerConfigBase,
+                                                                               SimpleTradingControllerConfigBase,]
                                  and (issubclass(member, ControllerConfigBase))), None)
             if not config_class:
                 raise InvalidController(f"No configuration class found in the module {controller_name}.")
