@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from pydantic import Field
 
-from hummingbot.core.data_type.common import OrderType, TradeType
+from hummingbot.core.data_type.common import OrderType, PriceType, TradeType
 from hummingbot.strategy_v2.controllers.controller_base import ControllerBase, ControllerConfigBase
 from hummingbot.strategy_v2.executors.position_executor.data_types import PositionExecutorConfig, TripleBarrierConfig
 from hummingbot.strategy_v2.models.executor_actions import CreateExecutorAction, ExecutorAction, StopExecutorAction
@@ -99,11 +99,36 @@ class SimpleTradingControllerBase(ControllerBase):
             # Determine trade side based on signal
             side = TradeType.BUY if signal > 0 else TradeType.SELL
 
-            # Get current price for entry
+            price_type = PriceType.BestAsk if side == TradeType.BUY else PriceType.BestBid
             entry_price = self.market_data_provider.get_price_by_type(
                 self.config.connector_name,
-                self.config.trading_pair
+                self.config.trading_pair,
+                price_type
             )
+
+            if entry_price is None or entry_price <= Decimal("0"):
+                self.logger().warning(
+                    f"Controller {self.config.id} could not fetch a valid entry price for"
+                    f" {self.config.connector_name}-{self.config.trading_pair}."
+                )
+                return actions
+
+            amount_quote = self.config.total_amount_quote
+            if amount_quote <= Decimal("0"):
+                self.logger().warning(
+                    f"Controller {self.config.id} has non-positive total_amount_quote={amount_quote}."
+                )
+                return actions
+
+            amount_base = amount_quote / entry_price
+            connector = self.market_data_provider.get_connector(self.config.connector_name)
+            amount_base = connector.quantize_order_amount(self.config.trading_pair, amount_base)
+
+            if amount_base <= Decimal("0"):
+                self.logger().warning(
+                    f"Controller {self.config.id} computed non-positive base amount after quantization."
+                )
+                return actions
 
             # Create position config
             position_config = PositionExecutorConfig(
@@ -112,7 +137,7 @@ class SimpleTradingControllerBase(ControllerBase):
                 trading_pair=self.config.trading_pair,
                 side=side,
                 entry_price=entry_price,
-                amount=self.config.total_amount_quote,
+                amount=amount_base,
                 triple_barrier_config=self._get_triple_barrier_config()
             )
 
